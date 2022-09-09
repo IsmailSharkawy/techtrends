@@ -85,11 +85,11 @@ def post(post_id):
     try:
         if post is None:
             app.logger.info(f"A non-existing article was retrieved.")
-            stdout_fileno.write(f"HIII")
+            stdout_fileno.write(f"A non-existing article was retrieved.")
             return render_template("404.html"), 404
         else:
             app.logger.info(f"Article '{post['title']}' was retrieved.")
-            stdout_fileno.write(f"Article '{post['title']}' was retrieved.")
+            stdout_fileno.write(f"A non-existing article was retrieved.")
             return render_template("post.html", post=post)
     except:
         stderr_fileno.write("Exception Occurred!\n")
