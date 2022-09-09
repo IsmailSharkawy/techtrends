@@ -15,6 +15,11 @@ from werkzeug.exceptions import abort
 import logging
 from flask.logging import default_handler
 
+import sys
+
+stdout_fileno = sys.stdout
+stderr_fileno = sys.stderr
+
 connection_count = 0
 # logging.basicConfig(
 #     format="%(levelname)s:%(name)s %(asctime)s %(message)s",
@@ -65,6 +70,8 @@ app.config["SECRET_KEY"] = "your secret key"
 @app.route("/")
 def index():
     connection = get_db_connection()
+    global connection_count
+    connection_count += 1
     posts = connection.execute("SELECT * FROM posts").fetchall()
     connection.close()
     return render_template("index.html", posts=posts)
@@ -75,19 +82,28 @@ def index():
 @app.route("/<int:post_id>")
 def post(post_id):
     post = get_post(post_id)
-    if post is None:
-        app.logger.info(f"A non-existing article was retrieved.")
-        return render_template("404.html"), 404
-    else:
-        app.logger.info(f"Article '{post['title']}' was retrieved.")
-        return render_template("post.html", post=post)
+    try:
+        if post is None:
+            app.logger.info(f"A non-existing article was retrieved.")
+            stdout_fileno.write(f"A non-existing article was retrieved.")
+            return render_template("404.html"), 404
+        else:
+            app.logger.info(f"Article '{post['title']}' was retrieved.")
+            stdout_fileno.write(f"A non-existing article was retrieved.")
+            return render_template("post.html", post=post)
+    except:
+        stderr_fileno.write("Exception Occurred!\n")
 
 
 # Define the About Us page
 @app.route("/about")
 def about():
-    app.logger.info(f"'About Us' page was retrieved.")
-    return render_template("about.html")
+    try:
+        app.logger.info(f"'About Us' page was retrieved.")
+        stdout_fileno.write(f"About Us' page was retrieved.")
+        return render_template("about.html")
+    except:
+        stderr_fileno.write("Exception Occurred!\n")
 
 
 # Define the post creation functionality
@@ -100,16 +116,23 @@ def create():
         if not title:
             flash("Title is required!")
         else:
-            connection = get_db_connection()
-            connection.execute(
-                "INSERT INTO posts (title, content) VALUES (?, ?)", (title, content)
-            )
-            app.logger.info(f"Article '{title}' was created.")
+            try:
+                global connection_count
+                connection_count += 1
+                connection = get_db_connection()
+                connection.execute(
+                    "INSERT INTO posts (title, content) VALUES (?, ?)",
+                    (title, content),
+                )
 
-            connection.commit()
-            connection.close()
+                connection.commit()
+                connection.close()
+                app.logger.info(f"Article '{title}' was created.")
+                stdout_fileno.write(f"Article '{title}' was created.")
+                return redirect(url_for("index"))
 
-            return redirect(url_for("index"))
+            except:
+                stderr_fileno.write("Exception Occurred!\n")
 
     return render_template("create.html")
 
@@ -128,6 +151,8 @@ def healthz():
 def metrics():
     connection = get_db_connection()
     posts_count = connection.execute("SELECT * FROM posts").fetchall()
+    global connection_count
+    connection_count += 1
     print(len(posts_count))
     connection.close()
     response = app.response_class(
@@ -145,9 +170,13 @@ def metrics():
 
 # start the application on port 3111
 if __name__ == "__main__":
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stderr_handler = logging.StreamHandler(sys.stderr)
+    handlers = [stderr_handler, stdout_handler]
     logging.basicConfig(
         format="%(levelname)s:%(name)s:%(asctime)s, %(message)s",
         datefmt="%m/%d/%Y, %H:%M:%S",
         level=logging.DEBUG,
+        handlers=handlers,
     )
     app.run(host="0.0.0.0", port="3111")
